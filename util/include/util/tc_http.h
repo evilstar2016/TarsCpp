@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -18,12 +18,14 @@
 #define __TC_HTTP_H_
 
 #include "util/tc_ex.h"
+#include "util/tc_port.h"
 #include "util/tc_common.h"
 #include "util/tc_autoptr.h"
 #include "util/tc_thread.h"
 #include "util/tc_socket.h"
 #include "util/tc_epoller.h"
 #include "util/tc_timeout_queue.h"
+#include "util/tc_network_buffer.h"
 #include <map>
 #include <sstream>
 #include <cassert>
@@ -59,6 +61,7 @@ namespace tars
  */             
 /////////////////////////////////////////////////
 
+class TC_NetWorkBuffer;
 
 /**
 * @brief  http协议解析异常类
@@ -66,7 +69,7 @@ namespace tars
 struct TC_Http_Exception : public TC_Exception
 {
     TC_Http_Exception(const string &sBuffer) : TC_Exception(sBuffer){};
-    ~TC_Http_Exception() throw(){};
+    ~TC_Http_Exception() {};
 };
 
 /**
@@ -75,7 +78,7 @@ struct TC_Http_Exception : public TC_Exception
 struct TC_HttpResponse_Exception : public TC_Http_Exception
 {
     TC_HttpResponse_Exception(const string &sBuffer) : TC_Http_Exception(sBuffer){};
-    ~TC_HttpResponse_Exception() throw(){};
+    ~TC_HttpResponse_Exception() {};
 };
 
 /**
@@ -84,8 +87,12 @@ struct TC_HttpResponse_Exception : public TC_Http_Exception
 struct TC_HttpRequest_Exception : public TC_Http_Exception
 {
     TC_HttpRequest_Exception(const string &sBuffer) : TC_Http_Exception(sBuffer){};
-    ~TC_HttpRequest_Exception() throw(){};
+    ~TC_HttpRequest_Exception() {};
 };
+
+class TC_TCPClient;
+class TC_HttpRequest;
+class TC_HttpResponse;
 
 /**   
  * @brief  简单的URL解析类.
@@ -278,20 +285,14 @@ public:
     void specialize();
 
 protected:
+	friend class TC_HttpRequest;
+
     /**
      * @brief  换成URL.
      * 
      * @return URL串
      */
     string toURL();
-
-    /**
-     * @brief 获取段.
-     *  
-     * @param frag 
-     * @return string
-     */
-    //string getFragment(const string& frag) const;
 
     /**
      * @brief  类型到字符串的转换
@@ -356,25 +357,14 @@ public:
      */
     struct CmpCase
     {
-        bool operator()(const string &s1, const string &s2) const
-        {
-            //return TC_Common::upper(s1) < TC_Common::upper(s2);
-            if(strcasecmp(s1.c_str(), s2.c_str()) < 0)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
+        bool operator()(const string &s1, const string &s2) const;
     };
 
     typedef multimap<string, string, CmpCase> http_header_type;
 
     /**
      * @brief  删除头部.
-     *  
+     *
      * @param sHeader:头部信息
      */
     void eraseHeader(const string &sHeader) { _headers.erase(sHeader); }
@@ -459,21 +449,7 @@ public:
      * @param sHeadName  header的名字
      * @param sHeadValue header的值
      */
-    void setHeader(const string &sHeadName, const string &sHeadValue) 
-    {
-        //Set-Cookie和Cookie可以有多个头
-        const char * pStr1 = "SET-COOKIE";
-        const char * pStr2 = "COOKIE";//原则上COOKIE只有一个，担心有兼容性问题，保留
-        if((strcasecmp(sHeadName.c_str(), pStr1) != 0) && (strcasecmp(sHeadName.c_str(), pStr2) != 0))
-        {
-            _headers.erase(sHeadName);
-        }
-       /* if(TC_Common::upper(sHeadName) != "SET-COOKIE" && TC_Common::upper(sHeadName) != "COOKIE")
-        {
-            _headers.erase(sHeadName);
-        }*/
-        _headers.insert(multimap<string, string>::value_type(sHeadName, sHeadValue)); 
-    }
+    void setHeader(const string &sHeadName, const string &sHeadValue);
 
     /**
      * @brief  设置header，常用的值请使用已经有的get/set方法设
@@ -483,12 +459,12 @@ public:
      */
     void setHeaderMulti(const string &sHeadName, const string &sHeadValue) 
     {
-        _headers.insert(multimap<string, string>::value_type(sHeadName, sHeadValue)); 
+        _headers.insert(multimap<string, string>::value_type(sHeadName, sHeadValue));
     }
 
     /**
      * @brief  获取头(重复的也提取).
-     *  
+     *
      * @param sHeadName  header的名字
      * @return           vector<string>header的值
      */
@@ -520,9 +496,39 @@ public:
      *
      * @return http内容串
      */
-    string getContent() const { return _content; }
+    const string &getContent() const { return _content; }
 
     /**
+     * @brief get body
+     * @return http body
+     */
+    string &getContent() { return _content; }
+
+    /**
+     * @brief 请求body内容, 其他都不变
+     *
+     * @return
+     */
+    void clearContent() { _content.clear(); }
+
+    /**
+     * append content
+     * @param append
+     * @param bUpdateContentLength
+     */
+    void appendContent(const char *buff, size_t len, bool bUpdateContentLength = false)
+    {
+	    _content.append(buff, len);
+
+	    if(bUpdateContentLength)
+	    {
+		    eraseHeader("Content-Length");
+		    if(_content.length() > 0)
+			    setContentLength(_content.length());
+	    }
+    }
+
+	/**
      * @brief 设置http body(默认不修改content-length).
      *  
      * @param content               http body内容
@@ -560,20 +566,26 @@ public:
      *
      * @return http_header_type&
      */
-     const http_header_type& getHeaders() const{return _headers;}
+    const http_header_type& getHeaders() const{return _headers;}
+
+	/**
+	 * get headers
+	 * @param header
+	 */
+	void getHeaders(map<string, string> &header);
 
      /**
       * @brief 重置
       */
-     void reset();
+    void reset();
 
-    /**
-     * @brief 读取一行.
-     *  
-     * @param ppChar  读取位置指针
-     * @return string 读取的内容
-     */
-    static string getLine(const char** ppChar);
+//    /**
+//     * @brief 读取一行.
+//     *
+//     * @param ppChar  读取位置指针
+//     * @return string 读取的内容
+//     */
+//    static string getLine(const char** ppChar);
 
     /**
      * @brief 读取一行.
@@ -582,7 +594,7 @@ public:
      * @param iBufLen  长度
      * @return string  读取的内容
      */
-    static string getLine(const char** ppChar, int iBufLen);
+//    static string getLine(const char** ppChar, int iBufLen);
 
     /**
      * @brief 生成头部字符串(不包含第一行).
@@ -604,8 +616,45 @@ public:
      * @param szBuffer 
      * @return const char*, 偏移的指针
      */
-    static const char* parseHeader(const char* szBuffer, http_header_type &sHeader);
+//    static const char* parseHeader(const char* szBuffer, http_header_type &sHeader);
 
+    template<typename ForwardIterator1, typename ForwardIterator2>
+	static void parseHeader(const ForwardIterator1 &beginIt, const ForwardIterator2 &headerIt, http_header_type &sHeader)
+	{
+		sHeader.clear();
+		string sep      = "\r\n";
+		string colon    = ":";
+		bool first      = true;
+		auto lineStartIt= beginIt;
+		while (true)
+		{
+			auto it = std::search(lineStartIt, headerIt, sep.c_str(), sep.c_str() + sep.size());
+			if(it == headerIt)
+			{
+				break;
+			}
+			if(!first)
+			{
+				auto itF = std::search(lineStartIt, it, colon.c_str(), colon.c_str() + colon.size());
+				if (itF != it)
+				{
+					string name;
+					name.resize(itF - lineStartIt);
+					std::copy(lineStartIt, itF, name.begin());
+					string value;
+					value.resize(it - (itF + 1));
+					std::copy(itF + 1, it, value.begin());
+					sHeader.insert(multimap<string, string>::value_type(TC_Common::trim(name, " "),
+					                                                    TC_Common::trim(value, " ")));
+				}
+			}
+			else
+			{
+				first = false;
+			}
+			lineStartIt = it + sep.size();
+		}
+	}
 protected:
 
     /**
@@ -715,7 +764,7 @@ public:
      * 
      * @return list<Cookie>&
      */
-    list<Cookie> getAllCookie();
+    const list<Cookie>& getAllCookie();
 
     /**
      * @brief  删除过期的Cookie，仅仅存在与当前回话的Cookie不删除
@@ -805,7 +854,7 @@ public:
      *        false:还需要继续解析，如果服务器主动关闭连接的模式下
      *        , 也可能不需要再解析了
      */
-    bool incrementDecode(string &sBuffer);
+	bool incrementDecode(TC_NetWorkBuffer &buff);
 
     /**
      * @brief 解析http应答(采用string方式) ，
@@ -933,7 +982,7 @@ public:
 
     /**
      * @brief 获取Set-Cookie.
-     * 
+     *
      * @return vector<string>
      */
     vector<string> getSetCookie() const;
@@ -944,7 +993,42 @@ public:
      * @param szBuffer 应答头信息
      * @return
      */
-    void parseResponseHeader(const char* szBuffer);
+//    void parseResponseHeader(const char* szBuffer, const char* header);
+
+    template<typename ForwardIterator1, typename ForwardIterator2>
+	void parseResponseHeader(const ForwardIterator1 &beginIt, const ForwardIterator2 &headerIt)
+	{
+		string line = "\r\n";
+		auto it = std::search(beginIt, headerIt, line.c_str(), line.c_str() + line.size());
+		assert(it != headerIt);
+		string sep = " ";
+		auto f1 = std::search(beginIt, headerIt, sep.c_str(), sep.c_str() + sep.size());
+		if(f1 == headerIt)
+		{
+			throw TC_HttpResponse_Exception("[TC_HttpResponse_Exception::parseResponeHeader] http response parse version format error : " + string(beginIt, it));
+		}
+		auto f2 = std::search(f1 + 1, headerIt, sep.c_str(), sep.c_str() + sep.size());
+		if(f1 == headerIt)
+		{
+			throw TC_HttpResponse_Exception("[TC_HttpResponse_Exception::parseResponeHeader] http response parse status format error : " + string(beginIt, it));
+		}
+		_headerLine = string(beginIt, it);
+		if(TC_Port::strncasecmp(_headerLine.c_str(), "HTTP/", 5) != 0)
+		{
+			throw TC_HttpResponse_Exception("[TC_HttpResponse_Exception::parseResponeHeader] http response version is not start with 'HTTP/' : " + _headerLine);
+		}
+		_version    = string(beginIt, f1);
+		_status     = TC_Common::strto<int>(string(f1 + 1, f2));
+		_about      = TC_Common::trim(string(f2 + 1, it));
+		parseHeader(beginIt, headerIt, _headers);
+	}
+protected:
+    /**
+     * 添加内容, 增量解析用到
+     * @param sBuffer
+     */
+    void addContent(const string &sBuffer);
+	void addContent(const char *buffer, size_t length);
 
 protected:
 
@@ -972,6 +1056,12 @@ protected:
      * 临时的content length
      */
     size_t  _iTmpContentLength;
+
+    /**
+     * 接收到数据的长度
+     */
+    size_t  _iRecvContentLength;
+
 };
 
 /********************* TC_HttpRequest ***********************/
@@ -984,7 +1074,7 @@ public:
     TC_HttpRequest()
     {
         TC_HttpRequest::reset();
-        setUserAgent("TC_Http");
+        setUserAgent("Tars-Http");
     }
 
     /**
@@ -1011,6 +1101,13 @@ public:
     static bool checkRequest(const char* sBuffer, size_t len);
 
     /**
+     * 检查http包是否收全
+     * @param buff
+     * @return
+     */
+	static bool checkRequest(TC_NetWorkBuffer &buff);
+
+	/**
      * @brief 重置
      */
     void reset();
@@ -1072,6 +1169,12 @@ public:
     void encode(vector<char> &buffer);
 
     /**
+     * encode buffer to TC_NetWorkBuffer
+     * @param buff
+     */
+	void encode(TC_NetWorkBuffer &buff);
+
+	/**
      * @brief 设置请求包.
      *  
      * @param sUrl         例如:http://www.qq.com/query?a=b&c=d
@@ -1080,6 +1183,7 @@ public:
      *                     (注意, 是在encode的时候创建的)
      */
     void setRequest(const string& method, const string &sUrl, const std::string& body = "", bool bNewCreateHost = false);
+    
     /**
      * @brief 设置Get请求包.
      *  
@@ -1155,9 +1259,47 @@ public:
     int doRequest(TC_HttpResponse &stHttpRep, int iTimeout = 3000);
 
     /**
-     * @brief 请求类型.
+     * 复用socket
+     * @param client
+     * @param stHttpRsp
+     * @return
+     */
+    int doRequest(TC_TCPClient &client, TC_HttpResponse& stHttpRsp);
+
+    /**
+     * @brief get request type
      */
     int requestType() const { return _requestType ; }
+
+	/**
+	 * @brief set request type
+	 */
+	void setRequestType(int requestType) {  _requestType = requestType ; }
+
+	/**
+	 * set method
+	 * @param
+	 * @return method invalid, throw exception
+	 */
+	void setMethod(const char * sMethod);
+
+	/**
+	 * set method
+	 * @param
+	 */
+	void setPath(const char * sPath);
+
+	/**
+	 * set domain
+	 * @param
+	 */
+	void setDomain(const char * sDomain);
+
+	/**
+	 * set schema
+	 * @param
+	 */
+	void setScheme(const char * sScheme);
 
     /**
      * @brief 是否是GET请求.
@@ -1203,7 +1345,7 @@ public:
 
     /**
      * @brief 获取完整的http请求.
-     * 
+     *
      * @return http请求串
      */
     string getOriginRequest() const { return _httpURL.getURL(); }
@@ -1219,7 +1361,7 @@ public:
      * @brief 获取http请求的url部分, 即?前面，不包括Host,
      *        例如http://www.qq.com/abc?a=b#def, 则为:/abc
      * @return http请求的url部分
-     * */ 
+     * */
     string getRequestUrl() const { return _httpURL.getPath(); }
 
     /**
@@ -1231,15 +1373,15 @@ public:
 
     /**
      * @brief 解析请求头部.
-     *  
+     *
      * @param szBuffer 请求头部
-     * @return size_t
+     * @return
      */
-    size_t parseRequestHeader(const char* szBuffer);
+    void parseRequestHeader(const char* szBuffer, const char *header);
 
     /**
      * @brief 请求类型到字符串.
-     *  
+     *
      * @param iRequestType  请求
      * @return              解析后的字符串
      */
@@ -1249,7 +1391,7 @@ protected:
 
     /**
      * @brief 对http请求编码.
-     *  
+     *
      * @param sUrl         需要进行编码的http请求
      * @param iRequestType 编码后的输出流
      * @return void

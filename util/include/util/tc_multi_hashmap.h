@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -44,7 +44,6 @@ namespace tars
 struct TC_Multi_HashMap_Exception : public TC_Exception
 {
     TC_Multi_HashMap_Exception(const string &buffer) : TC_Exception(buffer){};
-    TC_Multi_HashMap_Exception(const string &buffer, int err) : TC_Exception(buffer, err){};
     ~TC_Multi_HashMap_Exception() throw(){};
 };
 
@@ -130,6 +129,8 @@ public:
         /** 
           * @brief 主key头
           */
+#pragma pack(1) 
+
         struct tagMainKeyHead
         {
             uint32_t    _iSize;         /**容量大小*/
@@ -140,7 +141,7 @@ public:
             uint32_t    _iGetNext;        /**主key Get链的下一个主key*/
             uint32_t    _iGetPrev;        /**主key Get链的上一个主key*/
             uint32_t    _iBlockCount;    /**主key下数据个数*/
-            uint8_t        _iBitset;        /** 8个bit，用于标识不同的bool值，各bit的含义见BITWISE枚举定义*/
+            uint8_t     _iBitset;        /** 8个bit，用于标识不同的bool值，各bit的含义见BITWISE枚举定义*/
             union
             {
                 uint32_t    _iNextChunk;    /** 下一个Chunk块地址, _bNextChunk=true时有效*/
@@ -161,7 +162,7 @@ public:
             {
                 _cData[0] = 0;
             }
-        }__attribute__((packed));
+        };
 
          /**
          * @brief 
@@ -186,7 +187,8 @@ public:
                 _cData[0] = 0;
             }
 
-        }__attribute__((packed));
+        };
+#pragma pack() 
 
         /**
          * @brief 构造函数
@@ -431,6 +433,7 @@ public:
         /**
          * @brief block数据头
          */
+#pragma pack(1) 
         struct tagBlockHead
         {
             uint32_t        _iSize;         /**block的容量大小*/
@@ -442,9 +445,9 @@ public:
             uint32_t        _iSetNext;      /**Set链上的上一个Block, 没有则为0*/
             uint32_t        _iSetPrev;      /**Set链上的上一个Block, 没有则为0*/
             uint32_t        _iMainKey;        /**指向所属主key头*/
-            time_t            _iSyncTime;     /**上次缓写时间*/
-            uint8_t            _iVersion;        /**数据版本，1为初始版本，0为保留*/
-            uint8_t            _iBitset;        /**8个bit，用于标识不同的bool值，各bit的含义见BITWISE枚举定义*/
+            time_t          _iSyncTime;     /**上次缓写时间*/
+            uint8_t         _iVersion;        /**数据版本，1为初始版本，0为保留*/
+            uint8_t         _iBitset;        /**8个bit，用于标识不同的bool值，各bit的含义见BITWISE枚举定义*/
             union
             {
                 uint32_t    _iNextChunk;    /**下一个Chunk块, _iBitwise中的NEXTCHUNK_BIT为1时有效*/
@@ -470,7 +473,7 @@ public:
                 _cData[0] = 0;
             }
 
-        }__attribute__((packed));
+        };
 
         /**
          * @brief 
@@ -495,7 +498,8 @@ public:
                 _cData[0] = 0;
             }
 
-        }__attribute__((packed));
+        };
+#pragma pack() 
 
         /**
          * @brief 构造函数
@@ -1419,6 +1423,8 @@ public:
     /**
      * @brief map头
      */
+#pragma pack(1) 
+
     struct tagMapHead
     {
         char        _cMaxVersion;        /**大版本*/
@@ -1426,15 +1432,15 @@ public:
         bool        _bReadOnly;          /**是否只读*/
         bool        _bAutoErase;         /**是否可以自动淘汰*/
         char        _cEraseMode;         /**淘汰方式:0x00:按照Get链淘汰, 0x01:按照Set链淘汰*/
-        size_t        _iMemSize;           /**内存大小*/
-        size_t        _iMinDataSize;       /**最小数据块大小*/
-        size_t        _iMaxDataSize;       /**最大数据块大小*/
-        float        _fFactor;            /**因子*/
-        float        _fHashRatio;         /**chunks个数/hash个数*/
-        float        _fMainKeyRatio;         /**chunks个数/主key hash个数*/
-        size_t        _iElementCount;      /**总元素个数*/
-        size_t        _iEraseCount;        /**每次淘汰个数*/
-        size_t        _iDirtyCount;        /**脏数据个数*/
+        size_t      _iMemSize;           /**内存大小*/
+        size_t      _iMinDataSize;       /**最小数据块大小*/
+        size_t      _iMaxDataSize;       /**最大数据块大小*/
+        float       _fFactor;            /**因子*/
+        float       _fHashRatio;         /**chunks个数/hash个数*/
+        float       _fMainKeyRatio;         /**chunks个数/主key hash个数*/
+        size_t      _iElementCount;      /**总元素个数*/
+        size_t      _iEraseCount;        /**每次淘汰个数*/
+        size_t      _iDirtyCount;        /**脏数据个数*/
         uint32_t    _iSetHead;           /**Set时间链表头部*/
         uint32_t    _iSetTail;           /**Set时间链表尾部*/
         uint32_t    _iGetHead;           /**Get时间链表头部*/
@@ -1442,15 +1448,15 @@ public:
         uint32_t    _iDirtyTail;         /**脏数据链尾部*/
         uint32_t    _iBackupTail;        /**热备指针*/
         uint32_t    _iSyncTail;          /**回写链表*/
-        time_t        _iSyncTime;          /**回写时间*/
-        size_t        _iUsedChunk;         /**已经使用的内存块*/
-        size_t        _iGetCount;          /**get次数*/
-        size_t        _iHitCount;          /**命中次数*/
-        size_t        _iMKOnlyKeyCount;     /**主key的onlykey个数*/
-        size_t        _iOnlyKeyCount;         /**主键的OnlyKey个数, 这个数通常为0*/
-        size_t        _iMaxBlockCount;     /**主key链下最大的记录数，这个数值要监控，不能太大，否则会导致查询变慢*/
-        size_t        _iReserve[4];        /**保留*/
-    }__attribute__((packed));
+        time_t      _iSyncTime;          /**回写时间*/
+        size_t      _iUsedChunk;         /**已经使用的内存块*/
+        size_t      _iGetCount;          /**get次数*/
+        size_t      _iHitCount;          /**命中次数*/
+        size_t      _iMKOnlyKeyCount;     /**主key的onlykey个数*/
+        size_t      _iOnlyKeyCount;         /**主键的OnlyKey个数, 这个数通常为0*/
+        size_t      _iMaxBlockCount;     /**主key链下最大的记录数，这个数值要监控，不能太大，否则会导致查询变慢*/
+        size_t      _iReserve[4];        /**保留*/
+    };
 
     /**
      * @brief 需要修改的地址
@@ -1460,7 +1466,7 @@ public:
         size_t        _iModifyAddr;       /**修改的地址*/
         char        _cBytes;            /**字节数*/
         size_t        _iModifyValue;      /**值*/
-    }__attribute__((packed));
+    };
 
     /**
      * @brief 修改数据块头部
@@ -1470,7 +1476,7 @@ public:
         char            _cModifyStatus;         /**修改状态: 0:目前没有人修改, 1: 开始准备修改, 2:修改完毕, 没有copy到内存中*/
         size_t          _iNowIndex;             /**更新到目前的索引, 不能操作1000个*/
         tagModifyData   _stModifyData[1000];     /**一次最多1000次修改*/
-    }__attribute__((packed));
+    };
 
     /**
      * @brief HashItem
@@ -1479,7 +1485,7 @@ public:
     {
         uint32_t    _iBlockAddr;        /**指向数据项的内存地址索引*/
         uint32_t    _iListCount;        /**链表个数*/
-    }__attribute__((packed));
+    };
 
     /**
     * @brief 主key HashItem
@@ -1488,10 +1494,11 @@ public:
     {
         uint32_t    _iMainKeyAddr;        /**主key数据项的偏移地址*/
         uint32_t    _iListCount;        /**相同主key hash索引下主key个数*/
-    }__attribute__((packed));
+    };
+#pragma pack() 
 
     /**64位操作系统用基数版本号, 32位操作系统用偶数版本号*/
-#if __WORDSIZE == 64
+#if __WORDSIZE == 64 || defined _WIN64
 
     /**
     * @brief 定义版本号
@@ -2248,9 +2255,9 @@ protected:
 
     friend class Block;
     friend class BlockAllocator;
-    friend class HashMapIterator;
+    friend struct HashMapIterator;
     friend class HashMapItem;
-    friend class HashMapLockIterator;
+    friend struct HashMapLockIterator;
     friend class HashMapLockItem;
 
     /**

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -64,6 +64,15 @@ public:
     * @param pAddr 指令队列空间的指针
     */
     void connect(void *pAddr, size_t iSize);
+    
+    /**
+     * @author goodenpei
+     * 2016-09-12
+     * @brief 取第一个数据
+     * @param sOut   输出的数据快
+     * @return       bool,true:正确, false: 错误,无数据输出,队列空
+     */
+    bool front(string &sOut);
 
     /**
     * @brief 弹出数据
@@ -150,6 +159,7 @@ protected:
     /**
     *  @brief 队列控制结构
     */
+#pragma pack(1) 
     struct CONTROL_BLOCK
     {
         size_t iMemSize;            /**内存大小*/
@@ -157,7 +167,7 @@ protected:
         size_t iBotIndex;           /**底部元素索引,内容开始地址*/
         size_t iPushCount;          /**队列中进入元素的个数*/
         size_t iPopCount;           /**队列中弹出元素的个数*/
-    }__attribute__((packed));
+    };
 
     /**
      * @brief 需要修改的地址
@@ -167,7 +177,7 @@ protected:
         size_t  _iModifyAddr;       /**修改的地址*/
         char    _cBytes;            /**字节数*/
         size_t  _iModifyValue;      /**值*/
-    }__attribute__((packed));
+    };
 
     /**
      * @brief 修改数据块头部
@@ -177,7 +187,8 @@ protected:
         char            _cModifyStatus;         /**修改状态: 0:目前没有人修改, 1: 开始准备修改, 2:修改完毕, 没有copy到内存中*/
         size_t          _iNowIndex;             /**更新到目前的索引, 不能操作10个*/
         tagModifyData   _stModifyData[5];       /**一次最多5次修改*/
-    }__attribute__((packed));
+    };
+#pragma pack() 
 
     /**
     * 队列控制快(内存的起点)

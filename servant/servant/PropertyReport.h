@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -17,14 +17,18 @@
 #ifndef __TARS_PROPERTY_REPORT_H_
 #define __TARS_PROPERTY_REPORT_H_
 
+ #include "util/tc_lock.h"
 #include "util/tc_autoptr.h"
-#include "util/tc_thread_mutex.h"
-
+//#include "util/tc_thread_mutex.h"
+#include "util/tc_spin_lock.h"
 #include <tuple>
 #include <vector>
 #include <string>
 
 using namespace std;
+
+#undef max
+#undef min
 
 namespace tars
 {
@@ -45,7 +49,7 @@ public:
     /**
      * 获取该属性的服务名称
      */
-    std::string getMasterName() { return _sMasterName; }
+    const std::string &getMasterName() const { return _sMasterName; }
     
 public:
 
@@ -166,7 +170,7 @@ typedef TC_AutoPtr<PropertyReport> PropertyReportPtr;
  */
 
 template <typename... Params>
-class PropertyReportImp : public PropertyReport, public TC_ThreadMutex
+class PropertyReportImp : public PropertyReport, public TC_SpinLock
 {
 public:
     using PropertyReportData = std::tuple<Params...>;
@@ -191,7 +195,7 @@ public:
     */
     void report(int iValue) override
     {
-        TC_LockT<TC_ThreadMutex> lock(*this);
+        TC_LockT<TC_SpinLock> lock(*this);
         Helper<std::tuple_size<decltype(_propertyReportData)>::value>::Report(*this, iValue);
     }
 
@@ -203,7 +207,7 @@ public:
      */
     vector<pair<string, string> > get() override
     {
-        TC_LockT<TC_ThreadMutex> lock(*this);
+        TC_LockT<TC_SpinLock> lock(*this);
         return Helper<std::tuple_size<decltype(_propertyReportData)>::value>::Get(*this);
     }
 

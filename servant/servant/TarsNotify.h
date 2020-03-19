@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -43,7 +43,7 @@ public:
      *
      * @return int
      */
-    int setNotifyInfo(const CommunicatorPtr &comm, const string &obj, const string & app, const string &serverName, const string &sSetName="");
+    int setNotifyInfo(const CommunicatorPtr &comm, const string &obj, const string & app, const string &serverName, const string &nodeName, const string &sSetName="");
 
     /**
      * 通知, 一定是异步上报的
@@ -88,7 +88,12 @@ protected:
     /*
     *set 名字
     */
-    string            _setName;
+    string          _setName;
+
+    /*
+    *节点
+    */
+    string          _nodeName;
 };
 
 }

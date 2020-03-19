@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -42,7 +42,6 @@ namespace tars
 struct TC_HashMap_Exception : public TC_Exception
 {
     TC_HashMap_Exception(const string &buffer) : TC_Exception(buffer){};
-    TC_HashMap_Exception(const string &buffer, int err) : TC_Exception(buffer, err){};
     ~TC_HashMap_Exception() throw(){};
 };
 
@@ -95,6 +94,8 @@ public:
         /**
          * @brief block数据头
          */
+#pragma pack(1) 
+
         struct tagBlockHead
         {
             uint32_t    _iSize;         /**block的容量大小*/
@@ -115,7 +116,7 @@ public:
                 size_t  _iDataLen;      /**当前数据块中使用了的长度, _bNextChunk=false时有效*/
             };
             char        _cData[0];      /**数据开始部分*/
-        }__attribute__((packed));
+        };
 
         /**
          * @brief 非头部的block, 称为chunk
@@ -130,7 +131,8 @@ public:
                 size_t  _iDataLen;      /**当前数据块中使用了的长度, _bNextChunk=false时有效*/
             };
             char        _cData[0];      /**数据开始部分*/
-        }__attribute__((packed));
+        };
+#pragma pack() 
 
         /**
          * @brief 构造函数
@@ -888,7 +890,7 @@ public:
          * 
          * @return int
          */
-        int getIndex() const { return _iIndex; }
+        int getIndex() const { return (int)_iIndex; }
 
         /**
          * @brief 下一个item
@@ -1014,6 +1016,7 @@ public:
     /**
      * @brief map头
      */
+#pragma pack(1) 
     struct tagMapHead
     {
         char   _cMaxVersion;        /**大版本*/
@@ -1042,7 +1045,7 @@ public:
         size_t _iSyncTail;           /**回写链表*/
         size_t _iOnlyKeyCount;         /** OnlyKey个数*/
         size_t _iReserve[4];        /**保留*/
-    }__attribute__((packed));
+    };
 
     /**
      * @brief 需要修改的地址
@@ -1052,7 +1055,7 @@ public:
         size_t  _iModifyAddr;       /**修改的地址*/
         char    _cBytes;           /**字节数*/
         size_t  _iModifyValue;      /**值*/
-    }__attribute__((packed));
+    };
 
     /**
      * 修改数据块头部
@@ -1062,7 +1065,7 @@ public:
         char            _cModifyStatus;         /**修改状态: 0:目前没有人修改, 1: 开始准备修改, 2:修改完毕, 没有copy到内存中*/
         size_t          _iNowIndex;             /**更新到目前的索引, 不能操作10个*/
         tagModifyData   _stModifyData[20];      /**一次最多20次修改*/
-    }__attribute__((packed));
+    };
 
     /**
      * HashItem
@@ -1071,10 +1074,11 @@ public:
     {
         size_t   _iBlockAddr;     /**指向数据项的偏移地址*/
         uint32_t _iListCount;     /**链表个数*/
-    }__attribute__((packed));
+    };
+#pragma pack() 
 
     //64位操作系统用基数版本号, 32位操作系统用64位版本号
-#if __WORDSIZE == 64
+#if __WORDSIZE == 64 || defined _WIN64
 
     //定义版本号
     enum
@@ -1668,9 +1672,9 @@ protected:
 
     friend class Block;
     friend class BlockAllocator;
-    friend class HashMapIterator;
+    friend struct HashMapIterator;
     friend class HashMapItem;
-    friend class HashMapLockIterator;
+    friend struct HashMapLockIterator;
     friend class HashMapLockItem;
 
     //禁止copy构造
@@ -1743,13 +1747,13 @@ protected:
      * @brief  某hash链表数据个数+1
      * @param index
      */
-    void incListCount(uint32_t index) { update(&item(index)->_iListCount, item(index)->_iListCount+1); }
+    void incListCount(uint32_t index) { update(&item(index)->_iListCount, (uint32_t)item(index)->_iListCount+1); }
 
     /**
      * @brief  某hash链表数据个数+1
      * @param index
      */
-    void delListCount(size_t index) { update(&item(index)->_iListCount, item(index)->_iListCount-1); }
+    void delListCount(size_t index) { update(&item(index)->_iListCount, (uint32_t)item(index)->_iListCount-1); }
 
     /**
      * @brief 相对地址换成绝对地址
@@ -1811,7 +1815,7 @@ protected:
      */
     void update(void* iModifyAddr, size_t iModifyValue);
 
-#if __WORDSIZE == 64
+#if __WORDSIZE == 64 || defined _WIN64
     void update(void* iModifyAddr, uint32_t iModifyValue);
 #endif
 

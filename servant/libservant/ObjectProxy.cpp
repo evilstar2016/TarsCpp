@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -30,7 +30,7 @@ ObjectProxy::ObjectProxy(CommunicatorEpoll * pCommunicatorEpoll, const string & 
 : _communicatorEpoll(pCommunicatorEpoll)
 , _invokeSetId(setName)
 , _isInvokeBySet(false)
-, _id(0)
+// , _id(0)
 , _hasSetProtocol(false)
 , _conTimeout(1000)
 , _servantProxy(NULL)
@@ -55,7 +55,6 @@ ObjectProxy::ObjectProxy(CommunicatorEpoll * pCommunicatorEpoll, const string & 
 
     _proxyProtocol.requestFunc  = ProxyProtocol::tarsRequest;
     _proxyProtocol.responseFunc = ProxyProtocol::tarsResponse;
-    _protoName = "tars";
 
     _endpointManger.reset(new EndpointManager(this, _communicatorEpoll->getCommunicator(), sObjectProxyName, pCommunicatorEpoll->isFirstNetThread(), setName));
 
@@ -67,6 +66,11 @@ ObjectProxy::~ObjectProxy()
 
 void ObjectProxy::initialize()
 {
+}
+
+const vector<AdapterProxy*> & ObjectProxy::getAdapters()
+{
+	return _endpointManger->getAdapters();
 }
 
 int ObjectProxy::loadLocator()
@@ -93,7 +97,23 @@ int ObjectProxy::loadLocator()
     return 0;
 }
 
-void ObjectProxy::setProxyProtocol(const ProxyProtocol& protocol, const std::string& name)
+void ObjectProxy::setPushCallbacks(const ServantProxyCallbackPtr& cb)
+{
+    _pushCallback = cb;
+}
+
+ServantProxyCallbackPtr ObjectProxy::getPushCallback()
+{
+    return _pushCallback;
+}
+
+//
+//const string& ObjectProxy::name() const
+//{
+//    return _name;
+//}
+
+void ObjectProxy::setProxyProtocol(const ProxyProtocol& protocol)
 {
     if(_hasSetProtocol)
     {
@@ -102,7 +122,6 @@ void ObjectProxy::setProxyProtocol(const ProxyProtocol& protocol, const std::str
 
     _hasSetProtocol = true;
     _proxyProtocol  = protocol;
-    _protoName = name;
 }
 
 ProxyProtocol& ObjectProxy::getProxyProtocol()
@@ -110,12 +129,8 @@ ProxyProtocol& ObjectProxy::getProxyProtocol()
     return _proxyProtocol;
 }
 
-const std::string& ObjectProxy::getProtoName() const
-{
-    return _protoName;
-}
 
-void ObjectProxy::setSocketOpt(int level, int optname, const void *optval, socklen_t optlen)
+void ObjectProxy::setSocketOpt(int level, int optname, const void *optval, SOCKET_LEN_TYPE optlen)
 {
     SocketOpt socketOpt;
 
@@ -131,24 +146,32 @@ vector<SocketOpt>& ObjectProxy::getSocketOpt()
 {
     return _socketOpts;
 }
-
-void ObjectProxy::setPushCallbacks(const ServantProxyCallbackPtr& cb)
-{
-    _pushCallback = cb;
-}
-
-ServantProxyCallbackPtr ObjectProxy::getPushCallback()
-{
-    return _pushCallback;
-}
+//
+//bool ObjectProxy::invoke_sync(ReqMessage * msg)
+//{
+//	TLOGTAF("[TAF][ObjectProxy::invoke_sync, " << _name << ", begin]" << endl);
+//
+//	//选择一个远程服务的Adapter来调用
+//	AdapterProxy * pAdapterProxy = NULL;
+//	//选一个活的
+//	_endpointManger->selectAdapterProxy(msg, pAdapterProxy, true);
+//
+//	if(!pAdapterProxy)
+//	{
+//		return false;
+//	}
+//
+//	msg->adapter = pAdapterProxy;
+//	return pAdapterProxy->invoke_sync(msg);
+//}
 
 void ObjectProxy::invoke(ReqMessage * msg)
 {
-    TLOGINFO("[TARS][ObjectProxy::invoke, objname:" << _name << ", begin...]" << endl);
+    TLOGTARS("[TARS][ObjectProxy::invoke, objname:" << _name << ", begin...]" << endl);
 
     //选择一个远程服务的Adapter来调用
     AdapterProxy * pAdapterProxy = NULL;
-    bool bFirst = _endpointManger->selectAdapterProxy(msg, pAdapterProxy);
+    bool bFirst = _endpointManger->selectAdapterProxy(msg, pAdapterProxy, false);
 
     if(bFirst)
     {
@@ -158,7 +181,7 @@ void ObjectProxy::invoke(ReqMessage * msg)
         assert(bRet);
 
         //把数据缓存在obj里面
-        TLOGINFO("[TARS][ObjectProxy::invoke, objname:" << _name << ", select adapter proxy not valid (have not inovoke reg)]" << endl);
+        TLOGTARS("[TARS][ObjectProxy::invoke, objname:" << _name << ", select adapter proxy not valid (have not inovoke reg)]" << endl);
 
         return;
     }
@@ -167,24 +190,24 @@ void ObjectProxy::invoke(ReqMessage * msg)
     {
         TLOGERROR("[TARS][ObjectProxy::invoke, objname:"<< _name << ", selectAdapterProxy is null]"<<endl);
 
-        msg->response.iRet = TARSADAPTERNULL;
+        msg->response->iRet = TARSADAPTERNULL;
 
         doInvokeException(msg);
 
         return ;
     }
 
-    msg->adapter = pAdapterProxy;
+	msg->adapter = pAdapterProxy;
     pAdapterProxy->invoke(msg);
 }
 
 void ObjectProxy::doInvoke()
 {
-    TLOGINFO("[TARS][ObjectProxy::doInvoke, objname:" << _name << ", begin...]" << endl);
+    TLOGTARS("[TARS][ObjectProxy::doInvoke, objname:" << _name << ", begin...]" << endl);
 
     while(!_reqTimeoutQueue.empty())
     {
-        TLOGINFO("[TARS][ObjectProxy::doInvoke, objname:" << _name << ", pop...]" << endl);
+        TLOGTARS("[TARS][ObjectProxy::doInvoke, objname:" << _name << ", pop...]" << endl);
 
         ReqMessage * msg = NULL;
         _reqTimeoutQueue.pop(msg);
@@ -193,14 +216,14 @@ void ObjectProxy::doInvoke()
 
         //选择一个远程服务的Adapter来调用
         AdapterProxy * pAdapterProxy = NULL;
-        _endpointManger->selectAdapterProxy(msg,pAdapterProxy);
+        _endpointManger->selectAdapterProxy(msg,pAdapterProxy, false);
 
         if(!pAdapterProxy)
         {
             //这里肯定是请求过主控
             TLOGERROR("[TARS][ObjectProxy::doInvoke, objname:" << _name << ", selectAdapterProxy is null]" << endl);
 
-            msg->response.iRet = TARSADAPTERNULL;
+            msg->response->iRet = TARSADAPTERNULL;
 
             doInvokeException(msg);
 
@@ -208,18 +231,14 @@ void ObjectProxy::doInvoke()
         }
 
         msg->adapter = pAdapterProxy;
+
         pAdapterProxy->invoke(msg);
     }
 }
 
-const vector<AdapterProxy*> & ObjectProxy::getAdapters() const
-{
-    return _endpointManger->getAdapters();
-}
-
 void ObjectProxy::doInvokeException(ReqMessage * msg)
 {
-    // TLOGINFO("[TARS][ObjectProxy::doInvokeException, objname:" << _name << "]" << endl);
+    // TLOGTARS("[TARS][ObjectProxy::doInvokeException, objname:" << _name << "]" << endl);
 
     //单向调用出现异常直接删除请求
     if(msg->eType == ReqMessage::ONE_WAY)
@@ -300,16 +319,30 @@ void ObjectProxy::doInvokeException(ReqMessage * msg)
 
 void ObjectProxy::doTimeout()
 {
-//    TLOGINFO("[TARS][ObjectProxy::doInvokeException, objname:" << _name << "]" << endl);
+
+    const vector<AdapterProxy*> & vAdapterProxy = _endpointManger->getAdapters();
+    for(size_t iAdapter=0; iAdapter< vAdapterProxy.size();++iAdapter)
+    {
+        vAdapterProxy[iAdapter]->doTimeout();
+    }
 
     ReqMessage * reqInfo = NULL;
     while(_reqTimeoutQueue.timeout(reqInfo))
     {
         TLOGERROR("[TARS][ObjectProxy::doTimeout, objname:" << _name << ", queue timeout error]" << endl);
 
-        reqInfo->response.iRet = TARSINVOKETIMEOUT;
+        reqInfo->response->iRet = TARSINVOKETIMEOUT;
 
         doInvokeException(reqInfo);
+    }
+}
+
+void ObjectProxy::mergeStat(map<StatMicMsgHead, StatMicMsgBody> & mStatMicMsg)
+{
+    const vector<AdapterProxy*> & vAdapterProxy = _endpointManger->getAdapters();
+    for(size_t iAdapter=0; iAdapter< vAdapterProxy.size();++iAdapter)
+    {
+        vAdapterProxy[iAdapter]->mergeStat(mStatMicMsg);
     }
 }
 

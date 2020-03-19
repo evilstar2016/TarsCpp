@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -13,7 +13,7 @@
  * CONDITIONS OF ANY KIND, either express or implied. See the License for the 
  * specific language governing permissions and limitations under the License.
  */
-
+#include "util/tc_platform.h"
 #include "servant/AdminServant.h"
 #include "servant/Application.h"
 #include "servant/NotifyObserver.h"
@@ -40,7 +40,20 @@ void AdminServant::destroy()
 
 void AdminServant::shutdown(TarsCurrentPtr current)
 {
-    Application::terminate();
+	TLOGERROR("[TARS][AdminServant::shutdown]" << endl);
+
+#if TARGET_PLATFORM_WINDOWS
+	HANDLE hProcess = ::OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
+	if (hProcess == NULL)
+	{
+		return;
+	}
+
+	::TerminateProcess(hProcess, 0);
+#else
+    kill(getpid(), SIGINT); //通过给自己发信号的方式结束, 避免处理线程结束时自己join自己
+//     Application::terminate();
+#endif
 }
 
 string AdminServant::notify(const string &command, TarsCurrentPtr current)

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -19,11 +19,18 @@
 
 #include "servant/Global.h"
 #include "util/tc_socket.h"
+#include "AuthF.h"
+
+#if TARGET_PLATFORM_WINDOWS
+#include <WS2tcpip.h>
+#endif
 
 using namespace std;
 
 namespace tars
 {
+
+//enum AUTH_STATE;
 //////////////////////////////////////////////////////////////////////////////
 /**
  * 地址信息IP:Port
@@ -31,7 +38,7 @@ namespace tars
 class EndpointInfo
 {
 public:
-    enum EType { UDP = 0, TCP = 1, SSL = 2};
+//    enum EType { UDP = TC_ClientSocket::, TCP = 1, SSL = 2};
 
     /**
      * 构造函数
@@ -44,14 +51,19 @@ public:
      * @param port
      * @param type
      */
-    EndpointInfo(const string& host, uint16_t port, EndpointInfo::EType type, int32_t grid, const string & setDivision, int qos, int weight = -1, unsigned int weighttype = 0, int authType = 0);
+    EndpointInfo(const string& host, uint16_t port, TC_Endpoint::EType type, int32_t grid, const string & setDivision, int qos, int weight = -1, unsigned int weighttype = 0, int authType = 0);
 
     /**
-     * 地址的字符串描述,不带set信息
-     *
-     * @return string
+     * get endpoint
+     * @return
      */
-     const string& descNoSetInfo() const;
+	const TC_Endpoint &getEndpoint() const { return _ep; }
+//    /**
+//     * 地址的字符串描述,不带set信息
+//     *
+//     * @return string
+//     */
+//     const string& descNoSetInfo() const;
 
     /**
      * 地址的字符串描述
@@ -63,29 +75,29 @@ public:
         return _desc;
     }
 
-    /**
-     * 比较的地址的字符串描述
-     *
-     * @return string
-     */
-    const string & compareDesc() const
-    {
-        return _cmpDesc;
-    }
+//    /**
+//     * 比较的地址的字符串描述
+//     *
+//     * @return string
+//     */
+//    const string & compareDesc() const
+//    {
+//        return _cmpDesc;
+//    }
 
     /**
      * 详细地址字符串描述
      * 
      * @return string 
      */
-    const string& fulldesc() const;
+	bool isTcp() const;
 
     /**
      * 获取主机名
      *
      * @return const string&
      */
-    string host() const;
+    const string &host() const;
 
     /**
      * 获取端口号
@@ -103,17 +115,17 @@ public:
     /*
      * 获取qos的descp值
      */
-    int32_t qos() const {return _qos;}
+    int32_t qos() const {return _ep.getQos();}
 
     /*
      * 获取节点的静态权重值
      */
-    int weight() const {return _weight;}
+    int weight() const {return _ep.getWeight();}
 
     /**
      * @brief 获取节点的权重使用方式
      */
-    unsigned int getWeightType() const { return _weighttype; }
+    unsigned int getWeightType() const { return _ep.getWeightType(); }
 
     /**
      * 解析域名 
@@ -139,7 +151,7 @@ public:
      *
      * @return EndpointInfo::EType
      */
-    EndpointInfo::EType type() const;
+    TC_Endpoint::EType type() const { return _ep.getType(); }
 
     /**
     *设置set分组信息
@@ -158,13 +170,13 @@ public:
     /*
      * 获取认证类型
      */
-    int authType() const  { return _authType; }
+    int authType() const  { return _ep.getAuthType(); }
 
     /**
      * @brief is ipv6 socket or not
      * @return true if is ipv6
      */
-    bool isIPv6() const  { return _isIPv6; }
+    bool isIPv6() const  { return _ep.isIPv6(); }
 
     /**
      * 等于
@@ -174,13 +186,13 @@ public:
      */
     bool operator == (const EndpointInfo& r) const;
 
-    /**
-    *等于,set信息不参与比较
-    *@param r
-    *
-    *@return bool
-    */
-    bool equalNoSetInfo(const EndpointInfo& r) const;
+//    /**
+//    *等于,set信息不参与比较
+//    *@param r
+//    *
+//    *@return bool
+//    */
+//    bool equalNoSetInfo(const EndpointInfo& r) const;
 
     /**
      * 小于
@@ -207,46 +219,13 @@ protected:
     string createCompareDesc();
 
 private:
-    /**
-     * 地址IP
-     */
-    string                   _host;
-
-    /**
-     * 端口号
-     */
-    uint16_t               _port;
-
-    /**
-     * 路由状态
-     */
-    int32_t                _grid;
-
-    /*
-     * qos的dscp值
-     */
-
-    int32_t                _qos;
-
-    /**
-     * 类型
-     */
-    EndpointInfo::EType    _type;
+    TC_Endpoint _ep;
 
    /**
     *set分组信息
     */
     string                 _setDivision;
 
-    /**
-     *  节点的静态权重值
-     */
-    int                    _weight;
-
-    /**
-     *  节点的权重使用方式
-     */
-    unsigned int           _weighttype;
 
     /**
      * 地址
@@ -267,15 +246,6 @@ private:
      */
     string                 _desc;
 
-    /**
-     *  认证类型
-     */
-    int                    _authType;
-
-    /**
-     * _host is IPv6 or not
-     */
-    bool                   _isIPv6;
 
     /**
      * 解析域名成功

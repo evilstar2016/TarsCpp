@@ -24,13 +24,13 @@ fi
 
 echo "[create server: $APP.$SERVER ...]"
 
-DEMO_PATH=/usr/local/tars/cpp/script/http_demo
+DEMO_PATH=/usr/local/tars/cpp/script/demo
 
 cp $DEMO_PATH/* $APP/$SERVER/
 
 cd $APP/$SERVER/
 
-SRC_FILE="DemoServer.h DemoServer.cpp DemoServantImp.h DemoServantImp.cpp makefile"
+SRC_FILE="DemoServer.h DemoServer.cpp DemoServantImp.h DemoServantImp.cpp DemoServant.tars makefile"
 
 for FILE in $SRC_FILE
 do
@@ -39,7 +39,7 @@ do
 
 	cat $FILE | sed "s/DemoApp/$APP/g" > $FILE.tmp
 	mv $FILE.tmp $FILE
-	
+
 	cat $FILE | sed "s/DemoServant/$SERVANT/g" > $FILE.tmp
 	mv $FILE.tmp $FILE
 done

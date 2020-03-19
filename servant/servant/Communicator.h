@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -26,6 +26,7 @@
 #include "servant/ObjectProxyFactory.h"
 #include "servant/AsyncProcThread.h"
 #include "servant/CommunicatorEpoll.h"
+#include "servant/TarsLogger.h"
 #ifdef _USE_OPENTRACKING
 #include "zipkin/opentracing.h"
 #include "zipkin/tracer.h"
@@ -33,6 +34,9 @@
 #endif
 
 #define CONFIG_ROOT_PATH "/tars/application/client"
+//
+//struct ssl_ctx_st;
+//typedef struct ssl_ctx_st SSL_CTX;
 
 namespace tars
 {
@@ -95,16 +99,17 @@ public:
      */
     ~Communicator();
 
-    /**
-     * 生成代理
-     * @param T
-     * @param objectName
-     * @param setName 指定set调用的setid
-     * @return T
-     */
-    template<class T> T stringToProxy(const string& objectName,const string& setName="")
-    {
-        T prx = NULL;
+public:
+   /**
+    * 生成代理
+    * @param T
+    * @param objectName
+    * @param setName 指定set调用的setid
+    * @return T
+    */
+   template<class T> T stringToProxy(const string& objectName, const string& setName = "")
+   {
+      T prx = NULL;
 
         stringToProxy<T>(objectName, prx,setName);
 
@@ -170,6 +175,27 @@ public:
     void setProperty(TC_Config& conf, const string& domain = CONFIG_ROOT_PATH);
 
     /**
+     * get servant property
+     * @param sObj
+     * @return
+     */
+	map<string, string> getServantProperty(const string &sObj);
+
+	/**
+	 * set servant property
+	 * @param sObj
+	 * @return
+	 */
+	void setServantProperty(const string &sObj, const string& name, const string& value);
+
+	/**
+	 * get servant property
+	 * @param sObj
+	 * @return
+	 */
+	string getServantProperty(const string &sObj, const string& name);
+
+    /**
      * 上报统计
      * @return StatReport*
      */
@@ -214,6 +240,12 @@ public:
      */
     int64_t getMinTimeout() { return _minTimeout; }
 
+    /**
+     * get resource info
+     * @return
+     */
+	string getResouresInfo();
+
 protected:
     /**
      * 初始化
@@ -225,11 +257,6 @@ protected:
      * @return bool
      */
     bool isTerminating();
-
-    /**
-     * 由Property初始化客户端配置
-     */
-    void initClientConfig();
 
     /**
      * 获取对象代理生成器
@@ -246,6 +273,27 @@ protected:
     ServantProxy * getServantProxy(const string& objectName,const string& setName="");
 
     /**
+     * 数据加入到异步线程队列里面
+     * @return
+     */
+    void pushAsyncThreadQueue(ReqMessage * msg);
+
+    /**
+     * 上报统计事件
+     * @return
+     */
+    void doStat();
+#if TARS_SSL
+
+	/**
+	 * get openssl of trans
+	 * @param sObjName
+	 * @return vector<TC_Endpoint>
+	 */
+	shared_ptr<TC_OpenSSL> newClientSSL(const string & objName);
+#endif
+
+	/**
      * 框架内部需要直接访问通信器的类
      */
     friend class AdapterProxy;
@@ -261,6 +309,8 @@ protected:
     friend class AsyncProcThread;
 
     friend class CommunicatorEpoll;
+
+	friend class Transceiver;
 
 protected:
     /**
@@ -279,9 +329,14 @@ protected:
     map<string, string>    _properties;
 
     /**
+     * obj info
+     */
+    map<string, map<string, string>>   _objInfo;
+
+	/**
      * ServantProxy代码的工厂类
      */
-    ServantProxyFactoryPtr _servantProxyFactory;
+    ServantProxyFactory* _servantProxyFactory;
 
     /*
      * 网络线程数组
@@ -307,6 +362,39 @@ protected:
      * 最小的超时时间
      */
     int64_t                _minTimeout;
+
+#if TARS_SSL
+
+	/**
+	 * ssl ctx
+	 */
+	shared_ptr<TC_OpenSSL::CTX> _ctx;
+
+	/**
+	 * ssl
+	 */
+	unordered_map<string, shared_ptr<TC_OpenSSL::CTX>> _objCtx;
+#endif
+
+    /*
+     * 异步线程数组
+     */
+    //异步线程(跨通信器共享)
+    vector<AsyncProcThread*> _asyncThread;//[MAX_THREAD_NUM];
+
+    /*
+     * 异步队列的统计上报的对象
+     */
+    PropertyReportPtr        _reportAsyncQueue;
+
+    /*
+     * 异步线程数目
+     */
+    size_t                 _asyncThreadNum;
+    /*
+     * 分发给异步线程的索引seq
+     */
+    size_t                 _asyncSeq = 0;
 
 #ifdef _USE_OPENTRACKING
 public:

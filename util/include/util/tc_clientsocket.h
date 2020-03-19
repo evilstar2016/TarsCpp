@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tencent is pleased to support the open source community by making Tars available.
  *
  * Copyright (C) 2016THL A29 Limited, a Tencent company. All rights reserved.
@@ -20,6 +20,7 @@
 #include "util/tc_socket.h"
 #include <sstream>
 #include "util/tc_http.h"
+#include "util/tc_epoller.h"
 
 namespace tars
 {
@@ -69,7 +70,7 @@ public:
      * @param timeout, 超时时间, 毫秒
      * @param type, SOCK_STREAM或SOCK_DGRAM
      */
-    TC_Endpoint(const string& host, int port, int timeout, int type = 1, int grid = 0, int qos = 0, int weight = -1, unsigned int weighttype = 0, int authType = 0)
+    TC_Endpoint(const string& host, int port, int timeout, EType type = TCP, int grid = 0, int qos = 0, int weight = -1, unsigned int weighttype = 0, int authType = 0)
     {
         init(host, port, timeout, type, grid, qos, weight, weighttype, authType);
     }
@@ -132,7 +133,7 @@ public:
      *
      * @return bool
      */
-    bool operator == (const TC_Endpoint& l)
+    bool operator == (const TC_Endpoint& l) const
     {
         return (_host == l._host && _port == l._port && _timeout == l._timeout && _type == l._type &&
             _grid == l._grid && _qos == l._qos && _weight == l._weight && _weighttype == l._weighttype &&
@@ -143,14 +144,14 @@ public:
      * @brief 设置ip
      * @param str
      */
-    void setHost(const string& host)    { _host = host; }
+    void setHost(const string& host)    { _host = host; _isIPv6 = TC_Socket::addressIsIPv6(_host); }
 
     /**
      * @brief 获取ip
      *
      * @return const string&
      */
-    string getHost() const              { return _host; }
+    const string &getHost() const      { return _host; }
 
     /**
      * @brief 设置端口
@@ -184,6 +185,7 @@ public:
      * @return bool
      */
     int  isTcp() const                  { return _type == TCP || _type == SSL; }
+
     /**
      * @brief  是否是SSL
      *
@@ -195,17 +197,18 @@ public:
      * @brief 设置为TCP或UDP
      * @param bTcp
      */
-    void setTcp(bool bTcp)              { _type = bTcp; }
+	int isUdp() const                  { return _type == UDP; }
+//    void setTcp(bool bTcp)              { _type = bTcp; }
 
     /**
      * @brief 设置为TCP/UDP/SSL
      * @param type
      */
-    void setType(int type)              { _type = type; }
+    void setType(EType type)             { _type = type; }
     /**
      * @brief 获取协议类型
      */
-    int getType() const                { return _type; }
+    EType getType() const                { return _type; }
     /**
      * @brief 获取路由状态
      * @param grid
@@ -252,12 +255,14 @@ public:
      */
     void setWeightType(unsigned int weighttype)              { _weighttype = weighttype; }
 
+#if TARGET_PLATFORM_LINUX || TARGET_PLATFORM_IOS
     /**
      * @brief 是否是本地套接字
      *
      * @return bool
      */
     bool isUnixLocal() const            { return _port == 0; }
+#endif
 
     /**
      * @brief is ipv6 socket or not
@@ -280,7 +285,7 @@ public:
      *
      * @return string
      */
-    string toString()
+    string toString() const
     {
         ostringstream os;
         if (_type == TCP)
@@ -320,7 +325,7 @@ public:
     void parse(const string &desc);
 
 private:
-    void init(const string& host, int port, int timeout, int istcp, int grid, int qos, int weight, unsigned int weighttype, int authType);
+    void init(const string& host, int port, int timeout, EType type, int grid, int qos, int weight, unsigned int weighttype, int authType);
 
 protected:
     /**
@@ -341,7 +346,7 @@ protected:
     /**
      * 类型
      */
-    int         _type;
+    EType       _type;
 
     /**
      * 路由状态
@@ -385,12 +390,12 @@ public:
     /**
     *  @brief 构造函数
      */
-    TC_ClientSocket() : _port(0),_timeout(3000) {}
+    TC_ClientSocket();
 
     /**
      * @brief 析够函数
      */
-    virtual ~TC_ClientSocket(){}
+    virtual ~TC_ClientSocket();
 
     /**
     * @brief 构造函数
@@ -406,14 +411,7 @@ public:
     * @param iPort    端口, port为0时:表示本地套接字此时ip为文件路径
     * @param iTimeout 超时时间, 毫秒
     */
-    void init(const string &sIp, int iPort, int iTimeout)
-    {
-        _socket.close();
-        _ip         = sIp;
-        _port       = iPort;
-        _timeout    = iTimeout;
-        _isIPv6 = TC_Socket::addressIsIPv6(sIp);
-    }
+    void init(const string &sIp, int iPort, int iTimeout);
 
     /**
     * @brief 发送到服务器
@@ -432,9 +430,20 @@ public:
     virtual int recv(char *sRecvBuffer, size_t &iRecvLen) = 0;
 
     /**
+     * 关闭连接
+     */
+    virtual void close();
+
+    /**
+     * 获取socket
+     * @return
+     */
+	TC_Socket *getSocket() { return &_socket; }
+
+    /**
     * @brief  定义发送的错误
     */
-    enum
+    enum EM_CIENT_SOCKET_TYPE
     {
         EM_SUCCESS  = 0,          /** EM_SUCCESS:发送成功*/
         EM_SEND     = -1,        /** EM_SEND:发送错误*/
@@ -447,30 +456,32 @@ public:
     };
 
 protected:
+	TC_Epoller*     _epoller = NULL;
+
     /**
      * 套接字句柄
      */
-    TC_Socket     _socket;
+    TC_Socket       _socket;
 
     /**
      * ip或文件路径
      */
-    string        _ip;
+    string          _ip;
 
     /**
      * 端口或-1:标示是本地套接字
      */
-    int         _port;
+    int             _port;
 
     /**
      * 超时时间, 毫秒
      */
-    int            _timeout;
+    int             _timeout;
 
-    /**
-     * _ip is ipv6 or not
-     */
-    int        _isIPv6;
+	/**
+	 * 是否是IPv6
+	 */
+	bool        _isIPv6 = false;
 };
 
 /**
@@ -501,7 +512,7 @@ public:
     * @param iSendLen     发送buffer的长度
     * @return             int 0 成功,<0 失败
     */
-    int send(const char *sSendBuffer, size_t iSendLen);
+    virtual int send(const char *sSendBuffer, size_t iSendLen);
 
     /**
     * @brief  从服务器返回不超过iRecvLen的字节
@@ -509,7 +520,7 @@ public:
     * @param iRecvLen    指定接收多少个字符才返回,输出接收数据的长度
     * @return            int 0 成功,<0 失败
     */
-    int recv(char *sRecvBuffer, size_t &iRecvLen);
+    virtual int recv(char *sRecvBuffer, size_t &iRecvLen);
 
     /**
     *  @brief 从服务器直到结束符(注意必须是服务器返回的结束符,
